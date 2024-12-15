@@ -8,8 +8,6 @@ import pandas as pd
 
 from PIL import Image
 
-from medical_diffusion.data.augmentation.augmentations_2d import Normalize, ToTensor16bit
-
 class SimpleDataset2D(data.Dataset):
     def __init__(
         self,

@@ -10,10 +10,11 @@ import torch
 from torch.utils.data import ConcatDataset
 from pytorch_lightning.trainer import Trainer
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
-
+import sys
+sys.path.append("/data_hdd/syliu/workspace/Mask2PET") # This should be the absolute path to this folder
 
 from medical_diffusion.data.datamodules import SimpleDataModule
-from medical_diffusion.data.datasets import NiftiPairImageGenerator
+from medical_diffusion.data.datasets import NiftiPairImageGenerator, NiftiCTPETPairImageGenerator
 from medical_diffusion.models.embedders.latent_embedders import VQVAE, VQGAN, VAE, VAEGAN
 from torchvision.transforms import RandomCrop, Compose, ToPILImage, Resize, ToTensor, Lambda
 import torch.multiprocessing
@@ -21,9 +22,9 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-i', '--inputfolder', type=str, default="data/Task107_hecktor2021/labelsTrain/")
-parser.add_argument('-t', '--targetfolder', type=str, default="data/Task107_hecktor2021/imagesTrain/")
-parser.add_argument('--savefolder', type=str, default="./medfusion_3d/results")
+parser.add_argument('-i', '--inputfolder', type=str, default="/data_hdd/syliu/workspace/pet/Task107_hecktor2021/labelsTrain/")
+parser.add_argument('-t', '--targetfolder', type=str, default="/data_hdd/syliu/workspace/pet/Task107_hecktor2021/imagesTrain/")
+parser.add_argument('--savefolder', type=str, default="/data_hdd/syliu/workspace/Mask2PET/results_vqgan")
 parser.add_argument('--input_size', type=int, default=128)
 parser.add_argument('--depth_size', type=int, default=128)
 parser.add_argument('--num_channels', type=int, default=64)
@@ -70,14 +71,15 @@ if __name__ == "__main__":
     path_run_dir.mkdir(parents=True, exist_ok=True)
     gpus = [0] if torch.cuda.is_available() else None
 
-    dataset = NiftiPairImageGenerator(
+    dataset = NiftiCTPETPairImageGenerator(
         inputfolder,
         targetfolder,
         input_size=input_size,
         depth_size=depth_size,
         transform=input_transform if with_condition else transform,
         target_transform=transform,
-        full_channel_mask=True
+        full_channel_mask=True,
+        output_type='PETCT'
     )
 
    
@@ -144,10 +146,10 @@ if __name__ == "__main__":
     model = VQGAN(
         in_channels=1, 
         out_channels=1, 
+        spatial_dims=3,
         emb_channels=4,
         num_embeddings = 8192,
-        spatial_dims=3,
-        hid_chs =    [64, 128, 256, 512],
+        hid_chs = [64, 128, 256, 512],
         embedding_loss_weight=1,
         beta=1,
         start_gan_train_step=-1,
@@ -156,7 +158,7 @@ if __name__ == "__main__":
         use_attention='none',
     )
     
-    # model.vqvae.load_pretrained(Path.cwd()/'runs/2022_12_13_093727_patho_vqvae/last.ckpt')
+    # model.load_pretrained(Path('/data_hdd/syliu/workspace/pet/models--Valentina007--Mask2PET/epoch=284-step=114000.ckpt'))
     
 
     # -------------- Training Initialization ---------------
@@ -177,9 +179,12 @@ if __name__ == "__main__":
         save_top_k=5,
         mode=min_max,
     )
+    
+    accelerator = 'gpu' if torch.cuda.is_available() else None
+    
     trainer = Trainer(
-        accelerator='gpu',
-        devices=[0],
+        accelerator=accelerator,
+        devices=[6],
         # precision=16,
         # amp_backend='apex',
         # amp_level='O2',

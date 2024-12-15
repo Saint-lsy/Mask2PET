@@ -523,9 +523,9 @@ class VQGAN(VeryBasicModel):
 
     def _step(self, batch: dict, batch_idx: int, state: str, step: int, optimizer_idx:int):
         # ------------------------- Get Source/Target ---------------------------
+        
         x = batch['target']
-        target = x 
-
+        target = x
         # ------------------------- Run Model ---------------------------
         pred, pred_vertical, emb_loss = self(x)
 

@@ -1,7 +1,7 @@
 
 import sys 
 import os
-sys.path.append("./medfusion_3d")
+sys.path.append("/data_hdd/syliu/workspace/Mask2PET") # This should be the absolute path to this folder
 import torch.nn.functional as F 
 
 from pathlib import Path
@@ -86,7 +86,7 @@ noise_scheduler_kwargs = {
 
 # ------------ Initialize Latent Space  ------------
 latent_embedder = VQGAN 
-latent_embedder_checkpoint = "./pretrained/VQGAN/2024_01_07_090227/epoch=284-step=114000.ckpt"
+latent_embedder_checkpoint = "/data_hdd/syliu/workspace/pet/models--Valentina007--Mask2PET/epoch=284-step=114000.ckpt"
 
 
 # ------------ Initialize Pipeline ------------
@@ -113,14 +113,14 @@ pipeline = DiffusionPipeline(
 # pipeline = DiffusionPipeline.load_best_checkpoint(path_run_dir)
 # pipeline = DiffusionPipeline.load_from_checkpoint("./medfusion_3d/runs/LDM_VQGAN/2024_06_07_115628/epoch=199-step=9999.ckpt") #/home/local/PARTNERS/rh384/runs/LDM/epoch=119-step=24000.ckpt")
 
-ckpt_path = './runs/LDM_VQGAN/2024_06_07_175241/epoch=2759-step=137999.ckpt'
+ckpt_path = '/data_hdd/syliu/worksapce/pet/models--Valentina007--Mask2PET/epoch=3819-step=190999.ckpt'
 #'./medfusion_3d/runs/LDM_VQGAN/2024_06_07_175241/epoch=1079-step=53999.ckpt'
 pipeline.load_pretrained(Path(ckpt_path))
 
 pipeline.to(device)
 
-inputfolder = "data/Task107_hecktor2021/labelsVal/"
-targetfolder = "data/Task107_hecktor2021/imagesVal/"
+inputfolder = "/data_hdd/syliu/workspace/Mask2PET/test_case/Labels"
+targetfolder = "/data_hdd/syliu/workspace/Mask2PET/test_case/Images"
 input_size = 128
 depth_size = 128
 with_condition =  True
@@ -143,15 +143,17 @@ max_samples = None # set to None for all
 target_class = None # None for no specific class 
 # path_out = Path.cwd()/'results'/'MSIvsMSS_2'/'metrics'
 # path_out = Path.cwd()/'results'/'AIROGS'/'metrics'
-path_out = Path.cwd()/'results_new'/'metrics'/ 'nocrop'
-path_out.mkdir(parents=True, exist_ok=True)
+
+path_out = '/data_hdd/syliu/workspace/Mask2PET/results_new'
+
+# path_out.mkdir(parents=True, exist_ok=True)
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 # ----------------- Logging -----------
 current_time = datetime.now().strftime("%Y_%m_%d_%H%M%S")
 logger = logging.getLogger()
 logging.basicConfig(level=logging.INFO)
-logger.addHandler(logging.FileHandler(path_out/f'metrics_{current_time}.log', 'w'))
+logger.addHandler(logging.FileHandler(os.path.join(path_out, f'log_{current_time}.txt')))
 
 # ---------------- Dataset/Dataloader ----------------
 dataset = NiftiPairImageGenerator(
@@ -181,14 +183,14 @@ for i,batch in enumerate(tqdm(dl, total=len(dl))):
 
     condition_save = condition.squeeze(0).squeeze(0).detach().cpu().numpy()
     nifti_img_cond = nib.Nifti1Image(condition_save, affine = np.eye(4))
-    nib.save(nifti_img_cond, path_out/f'cond_{i}.nii.gz')  
+    nib.save(nifti_img_cond, os.path.join(path_out, f'condition_{i}.nii.gz')) 
 
     print(x_0.max())
     print(x_0.min())
     x_0 = (x_0 + 1) / 2
     target_img1 = x_0.squeeze(0).squeeze(0).detach().cpu().numpy()
     nifti_img_t = nib.Nifti1Image(target_img1, affine = np.eye(4))
-    nib.save(nifti_img_t, path_out/f'target_{i}.nii.gz')  
+    nib.save(nifti_img_t, os.path.join(path_out, f'target_{i}.nii.gz'))
     # --------- Conditioning ---------
     # un_cond = torch.tensor([1-cond]*n_samples, device=device)
     un_cond = None 
@@ -235,7 +237,9 @@ for i,batch in enumerate(tqdm(dl, total=len(dl))):
     ax.imshow(img[:, img.shape[1] // 2, ...], cmap="gray")
     ax = axs[2]
     ax.imshow(img[img.shape[0] // 2, ...], cmap="gray")
-
+    
+    fig.savefig(path_out/f"input_{i}.png")
+    
     fig, axs = plt.subplots(nrows=1, ncols=3)
     for ax in axs:
         ax.axis("off")
@@ -245,3 +249,5 @@ for i,batch in enumerate(tqdm(dl, total=len(dl))):
     ax.imshow(fake[:, fake.shape[1] // 2, ...], cmap="gray")
     ax = axs[2]
     ax.imshow(fake[fake.shape[0] // 2, ...], cmap="gray")
+
+    fig.savefig(path_out/f"output_{i}.png")

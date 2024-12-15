@@ -31,11 +31,11 @@ import argparse
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('-i', '--inputfolder', type=str, default="data/Task107_hecktor2021/labelsTrain/")
-parser.add_argument('-t', '--targetfolder', type=str, default="data/Task107_hecktor2021/imagesTrain/")
+parser.add_argument('-i', '--inputfolder', type=str, default="/data/syliu/pet/Task107_hecktor2021/labelsTrain/")
+parser.add_argument('-t', '--targetfolder', type=str, default="/data/syliu/pet/Task107_hecktor2021/imagesTrain/")
 
-parser.add_argument('-i_val', '--inputfolder_val', type=str, default="data/Task107_hecktor2021/labelsTest/")
-parser.add_argument('-t_val', '--targetfolder_val', type=str, default="data/Task107_hecktor2021/imagesTest/")
+parser.add_argument('-i_val', '--inputfolder_val', type=str, default="/data/syliu/pet/Task107_hecktor2021/labelsTest/")
+parser.add_argument('-t_val', '--targetfolder_val', type=str, default="/data/syliu/pet/Task107_hecktor2021/imagesTest/")
 
 parser.add_argument('--savefolder', type=str, default="./results")
 parser.add_argument('--input_size', type=int, default=128)
@@ -194,7 +194,7 @@ if __name__ == "__main__":
     # latent_embedder = None 
     # latent_embedder = VQVAE
     latent_embedder = VQGAN # VQVAE: "/home/local/PARTNERS/rh384/runs/VAE/epoch=114-step=23000.ckpt"
-    latent_embedder_checkpoint = "./pretrained_models/VQGAN/2024_01_07_090227/epoch=284-step=114000.ckpt"
+    latent_embedder_checkpoint = "/data/syliu/pet/models--Valentina007--Mask2PET/epoch=284-step=114000.ckpt"
     # "./runs/VQGAN/2024_01_07_090227/epoch=284-step=114000.ckpt"
 
 

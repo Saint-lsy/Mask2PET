@@ -78,7 +78,7 @@ class NiftiPairImageGenerator(Dataset):
             transform=None,
             target_transform=None,
             full_channel_mask=False,
-            combine_output=False
+            combine_output=False,
         ):
         self.input_folder = input_folder
         self.target_folder = target_folder
@@ -177,3 +177,138 @@ class NiftiPairImageGenerator(Dataset):
             return torch.cat([target_img, input_img], 0)
 
         return {'input':input_img, 'target':target_img}
+
+
+
+
+
+
+class NiftiCTPETPairImageGenerator(Dataset):
+    def __init__(self,
+            input_folder: str,
+            target_folder: str,
+            input_size: int,
+            depth_size: int,
+            output_type: str,
+            input_channel: int = 2,
+            transform=None,
+            target_transform=None,
+            full_channel_mask=False,
+            combine_output=False
+        ):
+        self.input_folder = input_folder
+        self.target_folder = target_folder
+        self.pair_files = self.pair_file()
+        self.input_size = input_size
+        self.depth_size = depth_size
+        self.input_channel = input_channel
+        self.scaler = MinMaxScaler()
+        self.transform = transform
+        self.target_transform = target_transform
+        self.full_channel_mask = full_channel_mask
+        self.combine_output = combine_output
+        self.output_type = output_type
+
+    def pair_file(self):
+        input_files = sorted(glob(os.path.join(self.input_folder, '*')))
+        target_files = sorted(glob(os.path.join(self.target_folder, '*_0000.nii.gz')))  #PET
+        target_files2 = sorted(glob(os.path.join(self.target_folder, '*_0001.nii.gz'))) #CT
+        pairs = []
+        for input_file, target_file, target_files2 in zip(input_files, target_files, target_files2):
+            assert int("".join(re.findall("\d", input_file))) == int("".join(re.findall("\d", target_file))[:-4])
+            assert int("".join(re.findall("\d", input_file))) == int("".join(re.findall("\d", target_files2))[:-4])
+            pairs.append((input_file, target_file, target_files2))
+        return pairs
+
+    def read_image(self, file_path, pass_scaler=False):
+        img = nib.load(file_path).get_fdata()
+        img = img.clip(min = 0)
+        img = np.expand_dims(img,0)
+        return img
+
+    def plot(self, index, n_slice=30):
+        data = self[index]
+        input_img = data['input']
+        target_img = data['target']
+        plt.subplot(1, 2, 1)
+        plt.imshow(input_img[:, :, n_slice])
+        plt.subplot(1, 2, 2)
+        plt.imshow(target_img[:, :, n_slice])
+        plt.show()
+
+    def resize_img(self, img):
+        h, w, d = img.shape
+        if h != self.input_size or w != self.input_size or d != self.depth_size:
+            img = tio.ScalarImage(tensor=img[np.newaxis, ...])
+            cop = tio.Resize((self.input_size, self.input_size, self.depth_size))
+            img = np.asarray(cop(img))[0]
+        return img
+
+    def resize_img_4d(self, input_img):
+        c, h, w, d = input_img.shape
+        scaled_img = snd.zoom(input_img, [c, self.input_size / h, self.input_size / w, self.depth_size / d])
+        return scaled_img.clip(min = 0)
+
+    def resize_img_4d_pad(self, input_img):
+        c, h, w, d = input_img.shape
+        pad_one_side = (self.input_size - h) // 2
+        padding = [(0,0), (pad_one_side,pad_one_side), (pad_one_side,pad_one_side), (pad_one_side,pad_one_side)]
+        scaled_img = np.pad(input_img, padding, mode='constant', constant_values=0)
+        return scaled_img.clip(min = 0)
+
+    def resize_img_4d_01(self, input_img):
+        c, h, w, d = input_img.shape
+        scaled_img = snd.zoom(input_img, [c, self.input_size / h, self.input_size / w, self.depth_size / d], order=0)
+        scaled_img = np.where(scaled_img > 0.5, 1, 0)
+        return scaled_img
+
+    def sample_conditions(self, batch_size: int):
+        indexes = np.random.randint(0, len(self), batch_size)
+        input_files = [self.pair_files[index][0] for index in indexes]
+        input_tensors = []
+        for input_file in input_files:
+            input_img = self.read_image(input_file, pass_scaler=self.full_channel_mask)
+            input_img = np.expand_dims(input_img,0)
+            # input_img = self.resize_img_4d(input_img)
+            if self.transform is not None:
+                input_img = self.transform(input_img).unsqueeze(0)
+                input_tensors.append(input_img)
+        return torch.cat(input_tensors, 0).cuda()
+
+    def __len__(self):
+        return len(self.pair_files)
+
+    def __getitem__(self, index):
+        label, PET_nii, CT_nii = self.pair_files[index]
+        label_image = self.read_image(label, pass_scaler=self.full_channel_mask)
+        # input_img = self.resize_img_4d(input_img) # if not self.full_channel_mask else self.resize_img_4d(input_img)
+        label_image = self.resize_img_4d_01(label_image)
+        
+        PET_img = self.read_image(PET_nii)
+        PET_img = self.resize_img_4d(PET_img)
+        PET_img = PET_img / PET_img.max()
+        
+        CT_img = self.read_image(CT_nii)
+        CT_img = self.resize_img_4d(CT_img)
+        CT_img = CT_img / CT_img.max()
+        
+        
+        if self.transform is not None:
+            label_image = self.transform(label_image)
+        if self.target_transform is not None:
+            CT_img = self.target_transform(CT_img)
+            PET_img = self.target_transform(PET_img)
+
+        if self.output_type == 'CT2PET':
+            return {'input':CT_img, 'target':PET_img}
+        elif self.output_type == 'PET2CT':
+            return {'input':PET_img, 'target':CT_img}
+        elif self.output_type == 'PETCT':
+            rand = np.random.rand()
+            if rand < 0.5:
+                return {'input':CT_img, 'target':PET_img}
+            else:
+                return {'input':PET_img, 'target':CT_img}
+
+
+

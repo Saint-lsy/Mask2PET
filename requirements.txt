@@ -1,5 +1,5 @@
 torch # pip install torch --extra-index-url https://download.pytorch.org/whl/cu113
-pytorch-lightning
+pytorch-lightning==1.8.5
 pytorch_msssim
 monai
 torchmetrics
